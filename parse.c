@@ -10,9 +10,39 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <glob.h>
 
 #include "parse.h"
 #include "tokenize.h"
+
+
+/*
+ * Expands a string value of a WORD token using system glob
+ * and appends the results to the pipeline
+ *
+ * Parameters:
+ *  pipelinep   The pointer to the pipeline to append to
+ *  value       The value to expand
+ *
+ * Returns:     Glob error on unsuccessful glob call
+ */
+static int glob_append(AST* pipelinep, const char* value)
+{
+    glob_t pglob;
+    int options = GLOB_TILDE_CHECK | GLOB_NOCHECK;
+    int globexit = glob(value, options, NULL, &pglob);
+    if (globexit) {
+        globfree(&pglob);
+        return globexit;
+    }
+
+    for (int i = 0; i < pglob.gl_pathc; i++)
+        AST_append(pipelinep, AST_word(WORD, 0, pglob.gl_pathv[i]));
+
+    globfree(&pglob);
+
+    return 0;
+}
 
 
 // Documented in .h file
@@ -28,8 +58,14 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
         char* value = token.value? strdup(token.value): NULL;
         TOK_consume(tokens);
 
-        if (tt == TOK_WORD || tt == TOK_QUOTED_WORD) {
-            AST_append(&ret, AST_word(tt, 0, value));
+        if (tt == TOK_QUOTED_WORD) AST_append(&ret, AST_word(tt, 0, value));
+        else if (tt == TOK_WORD) {
+            int globexit = glob_append(&ret, value);
+            if (globexit) {
+                snprintf(errmsg, errmsg_sz, "Glob encountered an error");
+                AST_free(ret);
+                return NULL;
+            }
         }
         else if (tt == TOK_LESSTHAN || tt == TOK_GREATERTHAN) {
             redirect_in  += tt == TOK_LESSTHAN;

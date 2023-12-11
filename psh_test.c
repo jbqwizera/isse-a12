@@ -18,6 +18,8 @@
 #include "pipeline.h"
 #include "parse.h"
 
+#define HOMEDIR "/home/jkwizera"
+
 
 // Checks that value is true; if not, prints a failure message and
 // returns 0 from this function
@@ -358,7 +360,7 @@ int test_parse()
 
     test_assert(test_parse_once(
         (Token []){TOK_new(TOK_WORD, "cd"), TOK_new(TOK_WORD, "~"),
-            {TOK_END}}, "cd ~", 2));
+            {TOK_END}}, "cd " HOMEDIR, 2));
 
 
     test_assert(test_parse_once(
