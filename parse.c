@@ -34,18 +34,25 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
         else if (tt == TOK_LESSTHAN || tt == TOK_GREATERTHAN) {
             redirect_in  += tt == TOK_LESSTHAN;
             redirect_out += tt == TOK_GREATERTHAN;
-            if (redirect_in > 1)
-                snprintf(errmsg, errmsg_sz,
-                    "Pipeline can have at most one input redirection");
+            char* which = "LESSTHAN";
+            if (tt == TOK_GREATERTHAN) which = "GREATERTHAN";
 
-            if (redirect_out > 1)
-                snprintf(errmsg, errmsg_sz,
-                    "Pipeline can have at most one output redirection");
+            if (!ret)
+                snprintf(errmsg, errmsg_sz, "%s must have a left expression", which);
+
+            if (ret && (AST_type(ret) == OP_LESSTHAN || AST_type(ret) == OP_GREATERTHAN))
+                snprintf(errmsg, errmsg_sz, "Invalid %s left expression", which);
+
+            if (!*errmsg && redirect_in > 1)
+                snprintf(errmsg, errmsg_sz, "Pipeline may have at most one %s", which);
+
+            if (!*errmsg && redirect_out > 1)
+                snprintf(errmsg, errmsg_sz, "Pipeline may have at most one %s", which);
 
             TokenType next_tt = TOK_next_type(tokens);
-            if (next_tt != TOK_WORD)
-                snprintf(errmsg, errmsg_sz,
-                    "Redirection must be followed by a filename");
+            if (!*errmsg && next_tt != TOK_WORD)
+                snprintf(errmsg, errmsg_sz, "%s expected TOK_WORD next, but got %s",
+                    which, TT_to_str(next_tt));
 
             if (*errmsg) {
                 AST_free(ret);
@@ -57,10 +64,21 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
             AST_append(&ret, AST_redirect(tt, AST_word(next_tt, 0, value)));
         }
         else if (tt == TOK_PIPE) {
-            TokenType next_tt = TOK_next_type(tokens);
-            if (next_tt != TOK_WORD && next_tt != TOK_QUOTED_WORD) {
+            if (!ret)
                 snprintf(errmsg, errmsg_sz,
-                    "Invalid pipe right expression %s", TT_to_str(next_tt));
+                    "PIPE must have a left expression");
+
+            TokenType next_tt = TOK_next_type(tokens);
+            if (!*errmsg && next_tt != TOK_WORD && next_tt != TOK_QUOTED_WORD) {
+                if (next_tt != TOK_END)
+                    snprintf(errmsg, errmsg_sz,
+                        "Invalid PIPE right expression");
+                else
+                    snprintf(errmsg, errmsg_sz,
+                        "PIPE must have a right expression");
+            }
+
+            if (*errmsg) {
                 AST_free(ret);
                 return NULL;
             }

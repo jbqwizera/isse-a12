@@ -117,6 +117,13 @@ void AST_append(AST* pipelinep, AST right)
 
 
 // Documented in .h file
+ASTNodeType AST_type(AST pipeline)
+{
+    assert(pipeline);
+    return pipeline->type;
+}
+
+// Documented in .h file
 int AST_count(AST pipeline)
 {
     if (!pipeline) return 0;

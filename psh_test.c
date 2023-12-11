@@ -379,6 +379,68 @@ test_error:
     return 0;
 }
 
+
+int test_parse_errors()
+{
+    size_t errmsg_sz = 128;
+    char errmsg[errmsg_sz];
+    CList tokens = NULL;
+
+    tokens = TOK_tokenize_input("|", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 1);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "PIPE must have a left expression"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("cat |", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 2);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "PIPE must have a right expression"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input(">", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 1);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "GREATERTHAN must have a left expression"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("ls <", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 2);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "LESSTHAN expected TOK_WORD next, but got (end)"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("ls < \"file.txt\"", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 3);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "LESSTHAN expected TOK_WORD next, but got QUOTED_WORD"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("ls | < \"file.txt\"", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 4);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "Invalid PIPE right expression"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("ls > file > file", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 5);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "Pipeline may have at most one GREATERTHAN"));
+    CL_free(tokens);
+
+    tokens = TOK_tokenize_input("ls < file < file", errmsg, errmsg_sz);
+    test_assert(CL_length(tokens) == 5);
+    test_assert(!Parse(tokens, errmsg, errmsg_sz));
+    test_assert(!strcasecmp(errmsg, "Pipeline may have at most one LESSTHAN"));
+    CL_free(tokens);
+
+    return 1;
+
+test_error:
+    CL_free(tokens);
+    return 0;
+}
+
 int main(int argc, char* argv[])
 {
     int passed = 0;
@@ -387,6 +449,7 @@ int main(int argc, char* argv[])
     num_tests++; passed += test_tok_tokenize_input();
     num_tests++; passed += test_ast_pipeline();
     num_tests++; passed += test_parse();
+    num_tests++; passed += test_parse_errors();
 
     printf("Passed %d/%d test cases\n", passed, num_tests);
     fflush(stdout);

@@ -35,6 +35,8 @@ void AST_append(AST* pipelinep, AST right);
 
 int AST_count(AST pipeline);
 
+ASTNodeType AST_type(AST pipeline);
+
 void AST_free(AST pipeline);
 
 size_t AST_pipeline2str(AST pipeline, char* buf, size_t buf_sz);
