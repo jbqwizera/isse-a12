@@ -169,9 +169,107 @@ static void exit_failure(const char* message, const char* context)
 
 
 // Documented in .h file
+static int isword(ASTNodeType type)
+{   return type == WORD || type == QUOTED_WORD; }
+
+static int isinternal(const char* name)
+{
+    return !strcmp(name, "outo") ||
+        !strcmp(name, "exit") ||
+        !strcmp(name, "author") ||
+        !strcmp(name, "pwd") ||
+        !strcmp(name, "cd");
+}
+
+static void internal(const char* name, const char* dir)
+{
+    size_t buffer_sz = 256;
+    char buffer[buffer_sz];
+
+    if      (!strcmp(name, "exit")) exit(0);
+    else if (!strcmp(name, "quit")) exit(0);
+    else if (!strcmp(name, "author")) printf("Jean Baptiste Kwizera\n");
+    else if (!strcmp(name, "pwd")) {
+        getcwd(buffer, buffer_sz);
+        printf("%s\n", buffer);
+    }
+    else if (!strcmp(name, "cd")) {
+        dir? chdir(dir): chdir(getenv("HOME"));
+    }
+}
+
 void AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
 {
-    if (!pipeline) exit_failure("pipeline", NULL);
+    if (!pipeline) return;
+
+    pid_t pid = fork();
+    if (pid ==-1) exit_failure("fork", NULL);
+    if (pid == 0) {
+        // store the command + arguments in a NULL-terminated buffer
+        char* argv[128];
+        int argc = 0;
+        AST flow = pipeline;
+        for (; flow && isword(flow->type); flow = flow->right)
+            argv[argc++] = (char*) flow->value;
+        argv[argc] = NULL;
+        if (!flow) {
+            if (isinternal(argv[0])) {
+                internal(argv[0], argv[1]);
+                execvp("true", argv);
+                exit_failure("true", argv[0]);
+            }
+            else {
+                execvp(argv[0], argv);
+                exit_failure("execvp", argv[0]);
+            }
+        }
+
+        // assume redirection
+        // next up in the pipeline must be a file
+        assert(flow->right);
+        assert(flow->right->type == WORD);
+        char* filename = (char*) flow->right->value;
+
+        // redirect file to stdin
+        if (flow->type == OP_LESSTHAN) {
+            int ifd = open(filename, O_RDONLY);
+            if (ifd == -1) exit_failure("open", filename);
+            dup2(ifd, STDIN_FILENO);
+            close(ifd);
+        }
+            
+        // redirect stdout to file
+        if (flow->type == OP_GREATERTHAN) {
+            int ofd = open(filename, O_RDWR | O_CREAT | O_TRUNC,
+                S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+            if (ofd == -1) exit_failure("open", filename);
+            dup2(ofd, STDOUT_FILENO);
+            close(ofd);
+        }
+
+        // move the pipeline flow
+        flow = flow->right;
+        flow = flow->right;
+        
+        // execute
+        if (isinternal(argv[0])) {
+            internal(argv[0], argv[1]);
+            execvp("true", argv);
+            exit_failure("true", argv[0]);
+        }
+        else {
+            execvp(argv[0], argv);
+            exit_failure("execvp", argv[0]);
+        }
+    }
+
+    int exitstatus;
+    waitpid(pid, &exitstatus, 0);
+    if (exitstatus) {
+        snprintf(errmsg, errmsg_sz,
+            "child %d exited with status %d\n", pid, exitstatus);
+        printf("Exiting program...\n");
+    }
 }
 
 

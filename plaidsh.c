@@ -65,7 +65,6 @@ int main(int argc, char* argv[])
         }
 
         AST_pipeline2str(pipeline, buffer, buffer_sz);
-        printf("pipeline => %s\n", buffer);
 
         AST_execute(pipeline, buffer, buffer_sz);
 

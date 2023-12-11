@@ -86,7 +86,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
             while (*input && *input != '"') {
                 if ((ch = *input++) == '\\' && !isescape(*input)) {
                     snprintf(errmsg, errmsg_sz,
-                        "Illegal escape character '?%c", *input);
+                        "Illegal escape character '?%c'", *input);
                     CL_free(tokens);
                     return NULL;
                 }
@@ -118,7 +118,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
             if (!start) start = input;
             if (ch == '\\' && !isescape(*++input)) {
                 snprintf(errmsg, errmsg_sz,
-                    "Illegal escape character '?%c", *input);
+                    "Illegal escape character '?%c'", *input);
                 CL_free(tokens);
                 return NULL;
             }

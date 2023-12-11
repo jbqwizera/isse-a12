@@ -391,49 +391,49 @@ int test_parse_errors()
     tokens = TOK_tokenize_input("|", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 1);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "PIPE must have a left expression"));
+    test_assert(!strcasecmp(errmsg, "No command specified"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("cat |", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 2);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "PIPE must have a right expression"));
+    test_assert(!strcasecmp(errmsg, "No command specified"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input(">", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 1);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "GREATERTHAN must have a left expression"));
+    test_assert(!strcasecmp(errmsg, "No command specified"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("ls <", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 2);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "LESSTHAN expected TOK_WORD next, but got (end)"));
+    test_assert(!strcasecmp(errmsg, "Expect filename after redirection"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("ls < \"file.txt\"", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 3);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "LESSTHAN expected TOK_WORD next, but got QUOTED_WORD"));
+    test_assert(!strcasecmp(errmsg, "Expect filename after redirection"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("ls | < \"file.txt\"", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 4);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "Invalid PIPE right expression"));
+    test_assert(!strcasecmp(errmsg, "No command specified"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("ls > file > file", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 5);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "Pipeline may have at most one GREATERTHAN"));
+    test_assert(!strcasecmp(errmsg, "Multiple redirection"));
     CL_free(tokens);
 
     tokens = TOK_tokenize_input("ls < file < file", errmsg, errmsg_sz);
     test_assert(CL_length(tokens) == 5);
     test_assert(!Parse(tokens, errmsg, errmsg_sz));
-    test_assert(!strcasecmp(errmsg, "Pipeline may have at most one LESSTHAN"));
+    test_assert(!strcasecmp(errmsg, "Multiple redirection"));
     CL_free(tokens);
 
     return 1;
