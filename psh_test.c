@@ -164,9 +164,9 @@ int test_tok_tokenize_input()
             {TOK_new(TOK_WORD, "\x1b[A\x1b[A'"), {TOK_END}}},
         
         // tokenizer errors
-        {"echo \\c", "Illegal escape character '?c", {{TOK_END}}},
-        {"echo \"\\b\"", "Illegal escape character '?b", {{TOK_END}}},
-        {"echo \"hi", "Unterminated quote", {{TOK_END}}},
+        {"echo \\c", "Illegal escape character 'c'", {{TOK_END}}},
+        {"echo \"\\b\"", "Illegal escape character 'b'", {{TOK_END}}},
+        {"echo \"hi", "Unterminated quote", {{TOK_END}}}
     };
 
 
@@ -307,7 +307,7 @@ int test_parse()
     test_assert(test_parse_once(
         (Token []){TOK_new(TOK_WORD, "cd"),
             TOK_new(TOK_WORD, "Plaid\\ Shell\\ Playground"),
-            {TOK_END}}, "cd Plaid\\ Shell\\ Playground", 2));
+            {TOK_END}}, "cd Plaid Shell Playground", 2));
 
     test_assert(test_parse_once(
         (Token []){TOK_new(TOK_WORD, "ls"),
@@ -359,7 +359,7 @@ int test_parse()
             {TOK_END}}, "this is not a command", 5));
 
     test_assert(test_parse_once(
-        (Token []){TOK_new(TOK_WORD, "cd"), TOK_new(TOK_WORD, "~"),
+        (Token []){TOK_new(TOK_WORD, "cd"), TOK_new(TOK_WORD, HOMEDIR),
             {TOK_END}}, "cd " HOMEDIR, 2));
 
 

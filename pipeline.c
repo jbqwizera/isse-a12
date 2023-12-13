@@ -172,66 +172,189 @@ static void exit_failure(const char* message, const char* context)
 static int isword(ASTNodeType type)
 {   return type == WORD || type == QUOTED_WORD; }
 
-static int isinternal(const char* name)
+
+static int pipescount(AST pipeline)
 {
-    return !strcmp(name, "outo") ||
-        !strcmp(name, "exit") ||
-        !strcmp(name, "author") ||
-        !strcmp(name, "pwd") ||
-        !strcmp(name, "cd");
+    if (!pipeline) return 0;
+
+    int ret = pipescount(pipeline->right);
+    if (pipeline->type == OP_PIPE)
+        ret = 1 + pipescount(pipeline->left);
+
+    return ret;
 }
 
-static void internal(const char* name, const char* dir)
+static void setargs(AST pipeline, char*** argvs, int* argcs, int n)
 {
-    size_t buffer_sz = 256;
-    char buffer[buffer_sz];
+    // process children right to left, due to somewhat left-associative
+    // nature of the pipe operator
+    int i = n - 1;
+    while (pipeline && pipeline->type == OP_PIPE) {
+        argcs[i] = 0;
+        for (AST pl = pipeline->right; pl; pl = pl->right)
+            argcs[i]++;
 
-    if      (!strcmp(name, "exit")) exit(0);
-    else if (!strcmp(name, "quit")) exit(0);
-    else if (!strcmp(name, "author")) printf("Jean Baptiste Kwizera\n");
-    else if (!strcmp(name, "pwd")) {
-        getcwd(buffer, buffer_sz);
-        printf("%s\n", buffer);
+        int j = 0;
+        argvs[i] = (char**) malloc((argcs[i] + 1) * sizeof(char*));
+        for (AST pl = pipeline->right; pl; pl = pl->right) {
+            ASTNodeType type = pl->type;
+            if      (isword(type)) argvs[i][j++] = (char*) pl->value;
+            else if (type == OP_LESSTHAN) argvs[i][j++] = "<";
+            else if (type == OP_GREATERTHAN) argvs[i][j++] = ">";
+        }
+        argvs[i][j] = NULL;
+
+        pipeline = pipeline->left;
+        i--;
     }
-    else if (!strcmp(name, "cd")) {
-        dir? chdir(dir): chdir(getenv("HOME"));
+
+    // leftmost child in the pipeline
+    argcs[i] = 0;
+    for (AST pl = pipeline; pl; pl = pl->right)
+        argcs[i]++;
+
+    int j = 0;
+    argvs[i] = (char**) malloc((argcs[i] + 1) * sizeof(char*));
+    for (AST pl = pipeline; pl; pl = pl->right) {
+        ASTNodeType type = pl->type;
+        if      (isword(type)) argvs[i][j++] = (char*) pl->value;
+        else if (type == OP_LESSTHAN) argvs[i][j++] = "<";
+        else if (type == OP_GREATERTHAN) argvs[i][j++] = ">";
     }
+    argvs[i][j] = NULL;
 }
 
-void AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
+int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
 {
-    if (!pipeline) return;
+    int num_pipes = pipescount(pipeline);
+    int num_children = num_pipes + 1;
+    char*** argvs = (char***) malloc(num_children * sizeof(char**));
+    int argcs[num_children];
+    int pids[num_children];
+    int fds[num_pipes][2];
 
+    setargs(pipeline, argvs, argcs, num_children);
+
+    for (int i = 0; i < num_pipes; i++)
+        if (pipe(fds[i]) == -1)
+            exit_failure("pipe", NULL);
+
+    for (int i = 0; i < num_children; i++) {
+        int argc = argcs[i];
+        char** argv = argvs[i];
+
+        pids[i] = fork();
+        if (pids[i] ==-1) exit_failure("fork", NULL);
+        if (pids[i] == 0) {
+            // close all fds before exec
+            for (int j = 0; j < num_pipes; j++) {
+                // first child uses fds[0][1]           for writing
+                // last  child uses fds[num_pipes-1][0] for reading
+                // i-th  child uses fds[i-1][0]         for reading
+                //             and  fds[i][1]           for writing
+                // close everything else
+                if (i == 0) {
+                    close(fds[j][0]);
+                    if (j != 0) close(fds[j][1]);
+                }
+                else if (i == num_children-1) {
+                    close(fds[j][1]);
+                    if (j != num_pipes-1) close(fds[j][0]);
+                }
+                else {
+                    if (j != i-1) close(fds[j][0]);
+                    if (j != i)   close(fds[j][1]);
+                }
+            }
+
+            if (argc-2 >= 0) {
+                char* value = argv[argc-2];
+                if (!strcmp(value, "<")) {
+                    // input redirection
+                    int ifd = open(argv[argc-1], O_RDONLY);
+                    if (ifd == -1) exit_failure("open", argv[argc-1]);
+                    dup2(ifd, STDIN_FILENO);
+                    close(ifd);
+                    argv[argc-2] = NULL;
+                }
+                else if (!strcmp(value, ">")) {
+                    // output redirection
+                    int ofd = open(argv[argc-1], O_RDWR | O_CREAT | O_TRUNC,
+                        S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+                    if (ofd == -1) exit_failure("open", argv[argc-1]);
+                    dup2(ofd, STDOUT_FILENO);
+                    close(ofd);
+                    argv[argc-2] = NULL;
+                }
+            }
+
+            // piping: redirect stdin to previous pipe
+            if (i > 0) {
+                dup2(fds[i-1][0], STDIN_FILENO);
+                close(fds[i-1][0]);
+            }
+
+            // piping: redirect stdout to next pipe
+            if (i < num_children-1) {
+                dup2(fds[i][1], STDOUT_FILENO);
+                close(fds[i][1]);
+            }
+
+            // exec
+            execvp(argv[0], argv);
+            exit_failure("execvp", argv[0]);
+        }
+
+        // close all pipes in parent
+        if (i < num_pipes) {
+            close(fds[i][0]);
+            close(fds[i][1]);
+        }
+        free(argvs[i]);
+    }
+    free(argvs);
+
+
+    int exit_val = 0;
+    for (int i = 0; i < num_children; i++) {
+        int exit_status;
+        int pid = wait(&exit_status);
+
+        if (WEXITSTATUS(exit_status) != 0)
+            exit_val = WEXITSTATUS(exit_status);
+
+        printf("Child %d exited with status %d\n", pid, WEXITSTATUS(exit_status));
+    }
+
+    return exit_val;
+
+    
+    /*** WORKS FOR ONE COMMAND ***/
+    /*
     pid_t pid = fork();
     if (pid ==-1) exit_failure("fork", NULL);
     if (pid == 0) {
         // store the command + arguments in a NULL-terminated buffer
         char* argv[128];
         int argc = 0;
-        AST flow = pipeline;
-        for (; flow && isword(flow->type); flow = flow->right)
-            argv[argc++] = (char*) flow->value;
+        AST pl = pipeline;
+        for (; pl && isword(pl->type); pl = pl->right)
+            argv[argc++] = (char*) pl->value;
         argv[argc] = NULL;
-        if (!flow) {
-            if (isinternal(argv[0])) {
-                internal(argv[0], argv[1]);
-                execvp("true", argv);
-                exit_failure("true", argv[0]);
-            }
-            else {
-                execvp(argv[0], argv);
-                exit_failure("execvp", argv[0]);
-            }
+
+        if (!pl) {
+            execvp(argv[0], argv);
+            exit_failure("execvp", argv[0]);
         }
 
         // assume redirection
         // next up in the pipeline must be a file
-        assert(flow->right);
-        assert(flow->right->type == WORD);
-        char* filename = (char*) flow->right->value;
+        assert(pl->right);
+        assert(pl->right->type == WORD);
+        char* filename = (char*) pl->right->value;
 
         // redirect file to stdin
-        if (flow->type == OP_LESSTHAN) {
+        if (pl->type == OP_LESSTHAN) {
             int ifd = open(filename, O_RDONLY);
             if (ifd == -1) exit_failure("open", filename);
             dup2(ifd, STDIN_FILENO);
@@ -239,7 +362,7 @@ void AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
         }
             
         // redirect stdout to file
-        if (flow->type == OP_GREATERTHAN) {
+        if (pl->type == OP_GREATERTHAN) {
             int ofd = open(filename, O_RDWR | O_CREAT | O_TRUNC,
                 S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
             if (ofd == -1) exit_failure("open", filename);
@@ -247,29 +370,23 @@ void AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
             close(ofd);
         }
 
-        // move the pipeline flow
-        flow = flow->right;
-        flow = flow->right;
+        // move the pipeline pl
+        pl = pl->right;
+        pl = pl->right;
         
         // execute
-        if (isinternal(argv[0])) {
-            internal(argv[0], argv[1]);
-            execvp("true", argv);
-            exit_failure("true", argv[0]);
-        }
-        else {
-            execvp(argv[0], argv);
-            exit_failure("execvp", argv[0]);
-        }
+        execvp(argv[0], argv);
+        exit_failure("execvp", argv[0]);
     }
 
     int exitstatus;
     waitpid(pid, &exitstatus, 0);
     if (exitstatus) {
         snprintf(errmsg, errmsg_sz,
-            "child %d exited with status %d\n", pid, exitstatus);
-        printf("Exiting program...\n");
+            "Child %d exited with status %d\n", pid, exitstatus);
+        exit(exitstatus);
     }
+    */
 }
 
 

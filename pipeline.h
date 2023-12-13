@@ -50,6 +50,6 @@ size_t AST_pipeline2str(AST pipeline, char* buf, size_t buf_sz);
  *  char*   The error message buffer space
  *  size_t  The size of the error message buffer space
  */
-void AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz);
+int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz);
 
 #endif /* _PIPELINE_H_ */
