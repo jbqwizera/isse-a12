@@ -300,93 +300,33 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                 close(fds[i][1]);
             }
 
-            // exec
+            // execute
             execvp(argv[0], argv);
             exit_failure("execvp", argv[0]);
-        }
-
-        // close all pipes in parent
-        if (i < num_pipes) {
-            close(fds[i][0]);
-            close(fds[i][1]);
         }
         free(argvs[i]);
     }
     free(argvs);
 
 
+    // close all fds in parent
+    for (int i = 0; i < num_pipes; i++)
+    {   close(fds[i][0]); close(fds[i][1]); }
+
+    // wait for all children to finish executing
     int exit_val = 0;
     for (int i = 0; i < num_children; i++) {
         int exit_status;
         int pid = wait(&exit_status);
 
-        if (WEXITSTATUS(exit_status) != 0)
+        if (WEXITSTATUS(exit_status) != 0) {
             exit_val = WEXITSTATUS(exit_status);
-
-        printf("Child %d exited with status %d\n", pid, WEXITSTATUS(exit_status));
+            printf("Child %d exited with status %d\n",
+                pid, WEXITSTATUS(exit_status));
+        }
     }
 
     return exit_val;
-
-    
-    /*** WORKS FOR ONE COMMAND ***/
-    /*
-    pid_t pid = fork();
-    if (pid ==-1) exit_failure("fork", NULL);
-    if (pid == 0) {
-        // store the command + arguments in a NULL-terminated buffer
-        char* argv[128];
-        int argc = 0;
-        AST pl = pipeline;
-        for (; pl && isword(pl->type); pl = pl->right)
-            argv[argc++] = (char*) pl->value;
-        argv[argc] = NULL;
-
-        if (!pl) {
-            execvp(argv[0], argv);
-            exit_failure("execvp", argv[0]);
-        }
-
-        // assume redirection
-        // next up in the pipeline must be a file
-        assert(pl->right);
-        assert(pl->right->type == WORD);
-        char* filename = (char*) pl->right->value;
-
-        // redirect file to stdin
-        if (pl->type == OP_LESSTHAN) {
-            int ifd = open(filename, O_RDONLY);
-            if (ifd == -1) exit_failure("open", filename);
-            dup2(ifd, STDIN_FILENO);
-            close(ifd);
-        }
-            
-        // redirect stdout to file
-        if (pl->type == OP_GREATERTHAN) {
-            int ofd = open(filename, O_RDWR | O_CREAT | O_TRUNC,
-                S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-            if (ofd == -1) exit_failure("open", filename);
-            dup2(ofd, STDOUT_FILENO);
-            close(ofd);
-        }
-
-        // move the pipeline pl
-        pl = pl->right;
-        pl = pl->right;
-        
-        // execute
-        execvp(argv[0], argv);
-        exit_failure("execvp", argv[0]);
-    }
-
-    int exitstatus;
-    waitpid(pid, &exitstatus, 0);
-    if (exitstatus) {
-        snprintf(errmsg, errmsg_sz,
-            "Child %d exited with status %d\n", pid, exitstatus);
-        exit(exitstatus);
-    }
-    */
 }
 
 
