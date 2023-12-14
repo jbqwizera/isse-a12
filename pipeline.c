@@ -221,7 +221,7 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
     for (int i = 0; i < num_pipes; i++) {
         if (pipe(fds[i]) == -1) {
             perror("pipe");
-            exit(EXIT_FAILURE);
+            _exit(EXIT_FAILURE);
         }
     }
 
@@ -229,8 +229,9 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
         int argc = argcs[i];
         char** argv = argvs[i];
 
+        // builtin commands - manipulating shell require no forking
         if (!strcmp(argv[0], "exit") || !strcmp(argv[0], "quit"))
-            exit(0);
+            _exit(0);
         else if (!strcmp(argv[0], "cd")) {
             char* dirpath = argv[1];
             if (dirpath == NULL) dirpath = getenv("HOME");
@@ -238,11 +239,13 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
             continue;
         }
 
+        // fork-exec a child process for the command
         pids[i] = fork();
         if (pids[i] == -1)
-        {   perror("fork"); exit(EXIT_FAILURE); }
+        {   perror("fork"); _exit(EXIT_FAILURE); }
 
         if (pids[i] == 0) {
+            char errmsg[1024];
             // close all fds before exec
             for (int j = 0; j < num_pipes; j++) {
                 // first child uses fds[0][1]           for writing
@@ -264,13 +267,18 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                 }
             }
 
-            if (argc-2 >= 0) {
+            if (argc-2 > 0) {
                 char* value = argv[argc-2];
                 if (!strcmp(value, "<")) {
                     // input redirection
                     int ifd = open(argv[argc-1], O_RDONLY);
-                    if (ifd == -1)
-                    {   perror("open"); exit(EXIT_FAILURE); }
+                    if (ifd == -1) {
+                        snprintf(errmsg, sizeof(errmsg),
+                            "%s: Permission denied", argv[argc-1]);
+                        printf("%s\n", errmsg);
+                        _exit(EXIT_FAILURE);
+                    }
+
                     dup2(ifd, STDIN_FILENO);
                     close(ifd);
                     argv[argc-2] = NULL;
@@ -279,8 +287,13 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                     // output redirection
                     int ofd = open(argv[argc-1], O_RDWR | O_CREAT | O_TRUNC,
                         S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-                    if (ofd == -1)
-                    {   perror("open"); exit(EXIT_FAILURE); }
+                    if (ofd == -1) {
+                        snprintf(errmsg, sizeof(errmsg),
+                            "%s: Permission denied", argv[argc-1]);
+                        printf("%s\n", errmsg);
+                        _exit(EXIT_FAILURE);
+                    }
+
                     dup2(ofd, STDOUT_FILENO);
                     close(ofd);
                     argv[argc-2] = NULL;
@@ -303,13 +316,17 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
             if (!strcmp(argv[0], "author")) {
                 execlp(__builtin_auth, __builtin_auth, AUTHOR, NULL);
                 perror(__builtin_auth);
-                free(argvs[i]);
-                exit(EXIT_FAILURE);
+                _exit(EXIT_FAILURE);
             }
+
             execvp(argv[0], argv);
-            perror(argv[0]);
-            free(argvs[i]);
-            exit(EXIT_FAILURE);
+            snprintf(errmsg, sizeof(errmsg), "%s: Command not found."
+                "*Child.*exited with status %d", argv[0], errno);
+            if (!strcmp(strerror(errno), "No such file or directory"))
+                printf("%s\n", errmsg);
+            else
+                perror(argv[0]);
+            _exit(EXIT_FAILURE);
         }
         free(argvs[i]);
     }

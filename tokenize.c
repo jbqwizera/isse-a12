@@ -45,26 +45,6 @@ static bool isescape(char ch)
            ch == '\\';
 }
 
-/*
-static int globber_append(CList tokens, const char* word)
-{
-    glob_t pglob;
-    int options = GLOB_TILDE_CHECK | GLOB_NOCHECK;
-    int globexit = glob(word, options, NULL, &pglob);
-    if (globexit) {
-        globfree(&pglob);
-        return globexit;
-    }
-
-    for (int i = 0; i < pglob.gl_pathc; i++) {
-        char* path = pglob.gl_pathv[i];
-        CL_append(tokens, TOK_nnew(TOK_WORD, path, strlen(path)));
-    }
-    globfree(&pglob);
-
-    return 0;
-}
-*/
 
 // Documented in .h file
 CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
@@ -86,7 +66,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
             while (*input && *input != '"') {
                 if ((ch = *input++) == '\\' && !isescape(*input)) {
                     snprintf(errmsg, errmsg_sz,
-                        "Illegal escape character '%c'", *input);
+                        "Illegal escape character %c", *input);
                     CL_free(tokens);
                     return NULL;
                 }
@@ -118,7 +98,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
             if (!start) start = input;
             if (ch == '\\' && !isescape(*++input)) {
                 snprintf(errmsg, errmsg_sz,
-                    "Illegal escape character '%c'", *input);
+                    "Illegal escape character %c", *input);
                 CL_free(tokens);
                 return NULL;
             }
@@ -160,10 +140,10 @@ void TOK_consume(CList tokens)
 static void TOK_print_token(int pos, Token token, void* cb_data)
 {
     TokenType tt = token.type; 
+    printf("%s", TT_to_str(tt));
     if (tt == TOK_WORD || tt == TOK_QUOTED_WORD)
-        printf("%s\n", token.value);
-    else
-        printf("%s\n", TT_to_str(token.type));
+        printf(" %s", token.value);
+    printf("\n");
 } 
 
 // Documented in .h file
