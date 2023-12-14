@@ -21,6 +21,12 @@
 #include "token.h"
 #include "pipeline.h"
 
+
+#define   __builtin_cd "true"
+#define __builtin_auth "echo"
+#define         AUTHOR "Jean Baptiste Kwizera"
+
+
 struct _ast_node {
     ASTNodeType type;
     const char* value;
@@ -146,32 +152,9 @@ void AST_free(AST pipeline)
 }
 
 
-/*
- * Exit program with a left, AST right and generated exit code
- *
- * Parameters:
- *  const char* The message to print for the last error
- *  const char* Note for more context
- */
-static void exit_failure(const char* message, const char* context)
-{
-    char buffer[128];
-    buffer[0] = 0;
-    strcat(buffer, message);
-    if (context && *context) {
-        strcat(buffer, " (");
-        strcat(buffer, context);
-        strcat(buffer, ")");
-    }
-    perror(buffer);
-    exit(EXIT_FAILURE);
-}
-
-
 // Documented in .h file
 static int isword(ASTNodeType type)
 {   return type == WORD || type == QUOTED_WORD; }
-
 
 static int pipescount(AST pipeline)
 {
@@ -235,16 +218,30 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
 
     setargs(pipeline, argvs, argcs, num_children);
 
-    for (int i = 0; i < num_pipes; i++)
-        if (pipe(fds[i]) == -1)
-            exit_failure("pipe", NULL);
+    for (int i = 0; i < num_pipes; i++) {
+        if (pipe(fds[i]) == -1) {
+            perror("pipe");
+            exit(EXIT_FAILURE);
+        }
+    }
 
     for (int i = 0; i < num_children; i++) {
         int argc = argcs[i];
         char** argv = argvs[i];
 
+        if (!strcmp(argv[0], "exit") || !strcmp(argv[0], "quit"))
+            exit(0);
+        else if (!strcmp(argv[0], "cd")) {
+            char* dirpath = argv[1];
+            if (dirpath == NULL) dirpath = getenv("HOME");
+            if (chdir(dirpath)) perror("cd");
+            continue;
+        }
+
         pids[i] = fork();
-        if (pids[i] ==-1) exit_failure("fork", NULL);
+        if (pids[i] == -1)
+        {   perror("fork"); exit(EXIT_FAILURE); }
+
         if (pids[i] == 0) {
             // close all fds before exec
             for (int j = 0; j < num_pipes; j++) {
@@ -272,7 +269,8 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                 if (!strcmp(value, "<")) {
                     // input redirection
                     int ifd = open(argv[argc-1], O_RDONLY);
-                    if (ifd == -1) exit_failure("open", argv[argc-1]);
+                    if (ifd == -1)
+                    {   perror("open"); exit(EXIT_FAILURE); }
                     dup2(ifd, STDIN_FILENO);
                     close(ifd);
                     argv[argc-2] = NULL;
@@ -281,7 +279,8 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                     // output redirection
                     int ofd = open(argv[argc-1], O_RDWR | O_CREAT | O_TRUNC,
                         S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-                    if (ofd == -1) exit_failure("open", argv[argc-1]);
+                    if (ofd == -1)
+                    {   perror("open"); exit(EXIT_FAILURE); }
                     dup2(ofd, STDOUT_FILENO);
                     close(ofd);
                     argv[argc-2] = NULL;
@@ -301,8 +300,16 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
             }
 
             // execute
+            if (!strcmp(argv[0], "author")) {
+                execlp(__builtin_auth, __builtin_auth, AUTHOR, NULL);
+                perror(__builtin_auth);
+                free(argvs[i]);
+                exit(EXIT_FAILURE);
+            }
             execvp(argv[0], argv);
-            exit_failure("execvp", argv[0]);
+            perror(argv[0]);
+            free(argvs[i]);
+            exit(EXIT_FAILURE);
         }
         free(argvs[i]);
     }
@@ -319,7 +326,7 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
         int exit_status;
         int pid = wait(&exit_status);
 
-        if (WEXITSTATUS(exit_status) != 0) {
+        if (pid > 0 && WEXITSTATUS(exit_status) != 0) {
             exit_val = WEXITSTATUS(exit_status);
             printf("Child %d exited with status %d\n",
                 pid, WEXITSTATUS(exit_status));
