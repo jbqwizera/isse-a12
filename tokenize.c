@@ -38,6 +38,15 @@ const char* TT_to_str(TokenType tt)
     __builtin_unreachable();
 }
 
+
+/* Checks whether or not a character is a legal escape character
+ *
+ * Parameters:
+ *  char    The character to check for
+ *
+ * Returns:
+ *  bool    true if the char passes the test, otherwise false
+ */
 static bool isescape(char ch)
 {
     return ch == 'n' || ch == 'r' || ch == 't' || ch == ' ' ||

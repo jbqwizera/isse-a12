@@ -202,7 +202,7 @@ test_error:
 
 /*
  * Tests the AST_word, AST_redirect, AST_pipe, ET_pipeline2string,
- * AST_count, and AST_append functions.
+ * AST_countnodes, AST_countpipes, AST_countcommands, and AST_append functions.
  *
  * Returns: 1 if all tests pass, 0 otherwise
  */
@@ -211,21 +211,22 @@ int test_ast_pipeline()
     AST pipeline = NULL;
     char buffer[128];
     size_t len;
-    int count;
 
     // ls
     pipeline = AST_word(WORD, 0, "ls");
     len = AST_pipeline2str(pipeline, buffer, sizeof(buffer));
-    count = AST_count(pipeline);
-    test_assert(count == 1);
+    test_assert(AST_countnodes(pipeline) == 1);
+    test_assert(AST_countpipes(pipeline) == 0);
+    test_assert(AST_countcommands(pipeline) == 1);
     test_assert(!strcmp(buffer, "ls"));
     test_assert(strlen(buffer) == len);
 
     // ls "$HOME"
     AST_append(&pipeline, AST_word(QUOTED_WORD, 0, "\"$HOME\""));
     len = AST_pipeline2str(pipeline, buffer, sizeof(buffer));
-    count = AST_count(pipeline);
-    test_assert(count == 2);
+    test_assert(AST_countnodes(pipeline) == 2);
+    test_assert(AST_countpipes(pipeline) == 0);
+    test_assert(AST_countcommands(pipeline) == 1);
     test_assert(!strcmp(buffer, "ls \"$HOME\""))
     test_assert(strlen(buffer) == len);
 
@@ -233,8 +234,9 @@ int test_ast_pipeline()
     pipeline = AST_pipe(pipeline,
             AST_word(WORD, AST_word(WORD, 0, "^t"), "grep"));
     len = AST_pipeline2str(pipeline, buffer, sizeof(buffer));
-    count = AST_count(pipeline);
-    test_assert(count == 5);
+    test_assert(AST_countnodes(pipeline) == 5);
+    test_assert(AST_countpipes(pipeline) == 1);
+    test_assert(AST_countcommands(pipeline) == 2);
     test_assert(!strcmp(buffer, "ls \"$HOME\" | grep ^t"));
     test_assert(strlen(buffer) == len);
 
@@ -249,8 +251,9 @@ int test_ast_pipeline()
                 AST_word(WORD, 0, "karenina.txt")));
 
     len = AST_pipeline2str(pipeline, buffer, sizeof(buffer));
-    count = AST_count(pipeline);
-    test_assert(count == 4);
+    test_assert(AST_countnodes(pipeline) == 4);
+    test_assert(AST_countpipes(pipeline) == 0);
+    test_assert(AST_countcommands(pipeline) == 1);
     test_assert(!strcmp(buffer, "echo \"all happy families are alike\" > karenina.txt"));
     test_assert(strlen(buffer) == len);
 
@@ -277,7 +280,7 @@ int test_parse_once(const Token token_arr[], const char* exp_str, int exp_count)
         CL_append(tokens, token_arr[i]);
 
     pipeline = Parse(tokens, buffer, buffer_sz);
-    test_assert(exp_count == AST_count(pipeline));
+    test_assert(exp_count == AST_countnodes(pipeline));
 
     AST_pipeline2str(pipeline, buffer, buffer_sz);
     test_assert(!strcmp(exp_str, buffer));

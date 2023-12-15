@@ -56,6 +56,19 @@ static char ASTNodeType_to_char(ASTNodeType ent)
 }
 
 
+/* Check if a pipeline node type is WORD or QUOTED word
+ *
+ * Parameters:
+ *  ASTNodeType The type of a pipeline
+ * 
+ * Returns:
+ *  int         0 if type is neither WORD nor QUOTED_WORD
+ *              non-zero value otherwise.
+ */
+static int isword(ASTNodeType type)
+{   return type == WORD || type == QUOTED_WORD; }
+
+
 // Documented in .h file
 AST AST_word(ASTNodeType type, AST right, const char* value)
 {
@@ -65,12 +78,14 @@ AST AST_word(ASTNodeType type, AST right, const char* value)
     AST ret = (AST) malloc(sizeof(struct _ast_node));
     assert(ret);
 
-    ret->type = type;
+    ret->type  = type;
     ret->value = strdup(value);
+    ret->left  = NULL;
     ret->right = right;
 
     return ret;
 }
+
 
 // Documented in .h file
 AST AST_redirect(ASTNodeType type, AST right)
@@ -81,11 +96,14 @@ AST AST_redirect(ASTNodeType type, AST right)
     AST ret = (AST) malloc(sizeof(struct _ast_node));
     assert(ret);
 
-    ret->type = type;
+    ret->type  = type;
+    ret->value = NULL;
+    ret->left  = NULL;
     ret->right = right;
 
     return ret;
 }
+
 
 // Documented in .h file
 AST AST_pipe(AST left, AST right)
@@ -95,13 +113,16 @@ AST AST_pipe(AST left, AST right)
     AST ret = (AST) malloc(sizeof(struct _ast_node));
     assert(ret);
 
-    ret->type = OP_PIPE;
-    ret->left = left;
+    ret->type  = OP_PIPE;
+    ret->value = NULL;
+    ret->left  = left;
     ret->right = right;
 
     return ret;
 }
 
+
+// Documented in .h file
 void AST_append(AST* pipelinep, AST right)
 {
     if (!right) return;
@@ -129,14 +150,28 @@ ASTNodeType AST_type(AST pipeline)
     return pipeline->type;
 }
 
+
 // Documented in .h file
-int AST_count(AST pipeline)
+int AST_countnodes(AST pipeline)
 {
     if (!pipeline) return 0;
     int ret = 1;
-    if (pipeline->type == OP_PIPE) ret += AST_count(pipeline->left);
-    return ret + AST_count(pipeline->right);
+    if (pipeline->type == OP_PIPE) ret += AST_countnodes(pipeline->left);
+    return ret + AST_countnodes(pipeline->right);
 }
+
+
+// Documented in .h file
+int AST_countpipes(AST pipeline)
+{
+    if (!pipeline || pipeline->type != OP_PIPE) return 0;
+    return 1 + AST_countpipes(pipeline->left);
+}
+
+
+// Documented in .h file
+int AST_countcommands(AST pipeline)
+{   return 1 + AST_countpipes(pipeline); }
 
 
 // Documented in .h file
@@ -152,10 +187,7 @@ void AST_free(AST pipeline)
 }
 
 
-// Documented in .h file
-static int isword(ASTNodeType type)
-{   return type == WORD || type == QUOTED_WORD; }
-
+/*
 static int pipescount(AST pipeline)
 {
     if (!pipeline) return 0;
@@ -166,50 +198,42 @@ static int pipescount(AST pipeline)
 
     return ret;
 }
+*/
 
 static void setargs(AST pipeline, char*** argvs, int* argcs, int n)
 {
     // process children right to left, due to somewhat left-associative
     // nature of the pipe operator
     int i = n - 1;
-    while (pipeline && pipeline->type == OP_PIPE) {
+    while (pipeline) {
         argcs[i] = 0;
-        for (AST pl = pipeline->right; pl; pl = pl->right)
+        AST curr = pipeline;
+        if (pipeline->type == OP_PIPE) curr = curr->right;
+
+        for (AST iter = curr; iter; iter = iter->right)
             argcs[i]++;
 
         int j = 0;
         argvs[i] = (char**) malloc((argcs[i] + 1) * sizeof(char*));
-        for (AST pl = pipeline->right; pl; pl = pl->right) {
-            ASTNodeType type = pl->type;
-            if      (isword(type)) argvs[i][j++] = (char*) pl->value;
+        for (AST iter = curr; iter; iter = iter->right) {
+            ASTNodeType type = iter->type;
+            if      (isword(type)) argvs[i][j++] = (char*) iter->value;
             else if (type == OP_LESSTHAN) argvs[i][j++] = "<";
             else if (type == OP_GREATERTHAN) argvs[i][j++] = ">";
         }
         argvs[i][j] = NULL;
 
+        if (pipeline->type != OP_PIPE) break;
         pipeline = pipeline->left;
         i--;
     }
-
-    // leftmost child in the pipeline
-    argcs[i] = 0;
-    for (AST pl = pipeline; pl; pl = pl->right)
-        argcs[i]++;
-
-    int j = 0;
-    argvs[i] = (char**) malloc((argcs[i] + 1) * sizeof(char*));
-    for (AST pl = pipeline; pl; pl = pl->right) {
-        ASTNodeType type = pl->type;
-        if      (isword(type)) argvs[i][j++] = (char*) pl->value;
-        else if (type == OP_LESSTHAN) argvs[i][j++] = "<";
-        else if (type == OP_GREATERTHAN) argvs[i][j++] = ">";
-    }
-    argvs[i][j] = NULL;
 }
 
-int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
+
+// Documented in .h file
+int AST_execute(AST pipeline)
 {
-    int num_pipes = pipescount(pipeline);
+    int num_pipes = AST_countpipes(pipeline);
     int num_children = num_pipes + 1;
     char*** argvs = (char***) malloc(num_children * sizeof(char**));
     int argcs[num_children];
@@ -245,26 +269,13 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
         {   perror("fork"); _exit(EXIT_FAILURE); }
 
         if (pids[i] == 0) {
-            char errmsg[1024];
             // close all fds before exec
+            // child[i] needs pipe[i-1][0] for reading
+            // child[i] needs pipe[i+0][1] for writing
+            // close all other fds before exec
             for (int j = 0; j < num_pipes; j++) {
-                // first child uses fds[0][1]           for writing
-                // last  child uses fds[num_pipes-1][0] for reading
-                // i-th  child uses fds[i-1][0]         for reading
-                //             and  fds[i][1]           for writing
-                // close everything else
-                if (i == 0) {
-                    close(fds[j][0]);
-                    if (j != 0) close(fds[j][1]);
-                }
-                else if (i == num_children-1) {
-                    close(fds[j][1]);
-                    if (j != num_pipes-1) close(fds[j][0]);
-                }
-                else {
-                    if (j != i-1) close(fds[j][0]);
-                    if (j != i)   close(fds[j][1]);
-                }
+                if (j != i-1) close(fds[j][0]);
+                if (j != i+0) close(fds[j][1]);
             }
 
             if (argc-2 > 0) {
@@ -273,9 +284,7 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                     // input redirection
                     int ifd = open(argv[argc-1], O_RDONLY);
                     if (ifd == -1) {
-                        snprintf(errmsg, sizeof(errmsg),
-                            "%s: Permission denied", argv[argc-1]);
-                        printf("%s\n", errmsg);
+                        printf("%s: Permission denied\n", argv[argc-1]);
                         _exit(EXIT_FAILURE);
                     }
 
@@ -288,9 +297,7 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
                     int ofd = open(argv[argc-1], O_RDWR | O_CREAT | O_TRUNC,
                         S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
                     if (ofd == -1) {
-                        snprintf(errmsg, sizeof(errmsg),
-                            "%s: Permission denied", argv[argc-1]);
-                        printf("%s\n", errmsg);
+                        printf("%s: Permission denied\n", argv[argc-1]);
                         _exit(EXIT_FAILURE);
                     }
 
@@ -320,10 +327,9 @@ int AST_execute(AST pipeline, char* errmsg, size_t errmsg_sz)
             }
 
             execvp(argv[0], argv);
-            snprintf(errmsg, sizeof(errmsg), "%s: Command not found."
-                "*Child.*exited with status %d", argv[0], errno);
             if (!strcmp(strerror(errno), "No such file or directory"))
-                printf("%s\n", errmsg);
+                printf("%s: Command not found."
+                    "*Child.*exited with status %d\n", argv[0], errno);
             else
                 perror(argv[0]);
             _exit(EXIT_FAILURE);
@@ -372,9 +378,9 @@ static unsigned long min(unsigned long a, unsigned long b)
  * Helper function for AST_pipeline2str.
  *
  * Parameters:
- *  AST         The input pipeline to print
- *  char*       The buffer to write the pipeline to
- *  size_t      The size of the buffer
+ *  AST     The input pipeline to print
+ *  char*   The buffer to write the pipeline to
+ *  size_t  The size of the buffer
  */
 size_t size = 0;
 static void AST_sprint(AST pipeline, char* buf, size_t buf_sz)

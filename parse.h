@@ -1,8 +1,6 @@
 /*
  * parse.h
  * 
- * Simple description
- *
  * Author:
  *  Jean Baptiste Kwizera <jkwizera@andrew.cmu.edu>
  */

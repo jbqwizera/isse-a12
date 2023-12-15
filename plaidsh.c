@@ -58,9 +58,7 @@ int main(int argc, char* argv[])
             goto loop_end;
         }
 
-        AST_pipeline2str(pipeline, buffer, buffer_sz);
-
-        AST_execute(pipeline, buffer, buffer_sz);
+        AST_execute(pipeline);
 
 loop_end:
         free(input);
