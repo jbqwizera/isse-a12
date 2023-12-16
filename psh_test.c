@@ -12,6 +12,8 @@
 #include <string.h>
 #include <assert.h>
 #include <stdbool.h>
+#include <unistd.h>
+#include <errno.h>
 
 #include "token.h"
 #include "tokenize.h"
@@ -448,6 +450,112 @@ test_error:
     return 0;
 }
 
+
+int bsh_execute(const char* input, char* buffer, size_t buffer_sz)
+{
+    FILE* output;
+    if ((output = popen(input, "r")) == NULL)
+        return errno;
+
+    char line[256];
+    while (fgets(line, sizeof(line)-1, output) != NULL) {
+        size_t len = strlen(line);
+        strncpy(buffer, line, len);
+        buffer += len;
+    }
+    *buffer = '\0';
+    pclose(output);
+
+    return 0;
+}
+
+
+/* Capture results of executing the pipeline parsed from given 
+ * input string and copy it to the provided buffer
+ *
+ * Parameters:
+ *  const char* The input string to parse into a pipeline and execute
+ *  char*       The buffer to hold results of execution of the pipeline   
+ *  size_t      The size of the buffer
+ *
+ * Returns:
+ *  int         The exit value of the execution of the parsed pipeline
+ */ 
+int psh_execute(const char* input, char* buffer, size_t buffer_sz)
+{
+    int fd[2];
+    int outlen;
+    int exit_val;
+    CList tokens;
+    AST pipeline;
+
+    if (pipe(fd) < 0) {
+        perror("pipe");
+        exit(1);
+    }
+    tokens = TOK_tokenize_input(input, buffer, buffer_sz);
+    pipeline = Parse(tokens, buffer, buffer_sz);
+
+    outlen = dup(STDOUT_FILENO);
+    dup2(fd[1], STDOUT_FILENO);
+    close(fd[1]);
+    exit_val = AST_execute(pipeline);
+    fflush(stdout);
+    read(fd[0], buffer, buffer_sz);
+    dup2(outlen, STDOUT_FILENO);
+    close(outlen);
+    close(fd[0]);
+
+    char* s = ".";
+    printf("%s", s);
+
+    CL_free(tokens);
+    AST_free(pipeline);
+
+    return exit_val;
+}
+
+
+int test_ast_execute()
+{
+    int bsh_exitstatus;
+    int psh_exitstatus;
+    size_t buffer_sz = 4096;
+    char bsh_buf[buffer_sz];
+    char psh_buf[buffer_sz];
+
+    bsh_exitstatus = bsh_execute("pwd", bsh_buf, buffer_sz);
+    psh_exitstatus = psh_execute("pwd", psh_buf, buffer_sz);
+    test_assert(bsh_exitstatus == psh_exitstatus);
+    test_assert(!strcmp(bsh_buf, psh_buf));
+
+    bsh_exitstatus = bsh_execute("ls --color", bsh_buf, buffer_sz);
+    psh_exitstatus = psh_execute("ls --color", psh_buf, buffer_sz);
+    test_assert(bsh_exitstatus == psh_exitstatus);
+    test_assert(!strncmp(bsh_buf, psh_buf, strlen(bsh_buf)));
+
+    bsh_exitstatus = bsh_execute("./setup_playground.sh", bsh_buf, buffer_sz);
+    psh_exitstatus = psh_execute("./setup_playground.sh", psh_buf, buffer_sz);
+    test_assert(bsh_exitstatus == psh_exitstatus);
+    test_assert(!strncmp(bsh_buf, psh_buf, strlen(bsh_buf)));
+
+    bsh_exitstatus = bsh_execute("ls", bsh_buf, buffer_sz);
+    psh_exitstatus = psh_execute("ls", psh_buf, buffer_sz);
+    test_assert(bsh_exitstatus == psh_exitstatus);
+    test_assert(!strncmp(bsh_buf, psh_buf, strlen(bsh_buf)));
+
+    bsh_exitstatus = bsh_execute("cd Plaid\\ Shell\\ Playground", bsh_buf, buffer_sz);
+    psh_exitstatus = psh_execute("cd Plaid\\ Shell\\ Playground", psh_buf, buffer_sz);
+    test_assert(bsh_exitstatus == psh_exitstatus);
+    test_assert(!strncmp(bsh_buf, psh_buf, strlen(bsh_buf)));
+
+    return 1;
+
+test_error:
+    return 0;
+}
+
+
 int main(int argc, char* argv[])
 {
     int passed = 0;
@@ -457,6 +565,8 @@ int main(int argc, char* argv[])
     num_tests++; passed += test_ast_pipeline();
     num_tests++; passed += test_parse();
     num_tests++; passed += test_parse_errors();
+    num_tests++; passed += test_ast_execute();
+
 
     printf("Passed %d/%d test cases\n", passed, num_tests);
     fflush(stdout);

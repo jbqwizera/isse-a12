@@ -1,0 +1,108 @@
+Welcome to Plaid Shell!
+[?2004h[01;31m#?[00;39m 
+[?2004l[?2004h[01;31m#?[00;39m     
+[?2004l[?2004h[01;31m#?[00;39m   \  
+[?2004l : Command not found
+Child 199374 exited with status 2
+[?2004h[01;31m#?[00;39m pwd
+[?2004l/home/jkwizera/Assignments/12
+[?2004h[01;31m#?[00;39m ls --color
+[?2004l[0m[01;31m'Assignment 12 Test Script.zip'[0m   parse.c            plaidshell_test.log
+ Makefile                         parse.h            [01;32mpsh_test[0m
+[01;34m'Plaid Shell Playground'[0m          parse.o            psh_test.c
+ README.md                        pipeline.c         psh_test.o
+ [01;32ma.out[0m                            pipeline.h         scratch.c
+ clist.c                          pipeline.o         [01;32msetup_playground.sh[0m
+ clist.h                          [01;32mplaidsh[0m            token.h
+ clist.o                          plaidsh.c          tokenize.c
+ files.txt                        plaidsh.o          tokenize.h
+ [01;32minternal[0m                         plaidsh_test.log   tokenize.o
+ internal.c                       [01;32mplaidsh_test.py[0m
+ [01;32mparse[0m                            [01;32mplaidshell[0m
+[?2004h[01;31m#?[00;39m ./setup_playground.sh
+[?2004lPlaid Shell playground created...
+[?2004h[01;31m#?[00;39m cd Plaid\ Shell\ Playground
+[?2004l[?2004h[01;31m#?[00;39m pwd
+[?2004l/home/jkwizera/Assignments/12/Plaid Shell Playground
+[?2004h[01;31m#?[00;39m ls
+[?2004l README  'best sitcoms.txt'  'seven dwarfs.txt'   shells.txt
+[?2004h[01;31m#?[00;39m ls *.txt
+[?2004l'best sitcoms.txt'  'seven dwarfs.txt'	 shells.txt
+[?2004h[01;31m#?[00;39m echo $PATH
+[?2004l$PATH
+[?2004h[01;31m#?[00;39m author
+[?2004lHowdy Pierce
+[?2004h[01;31m#?[00;39m author | sed -e "s/^/Written by /"
+[?2004lWritten by Howdy Pierce
+[?2004h[01;31m#?[00;39m grep Happy *.txt
+[?2004lbest sitcoms.txt:Happy Days
+seven dwarfs.txt:Happy
+[?2004h[01;31m#?[00;39m cat "best sitcoms.txt" | grep Seinfeld
+[?2004lSeinfeld
+[?2004h[01;31m#?[00;39m cat "best sitcoms.txt"|grep Seinfeld|wc -l
+[?2004l1
+[?2004h[01;31m#?[00;39m sed -ne "s/The Simpsons/I Love Lucy/p" < best\ sitcoms.txt > output
+[?2004l[?2004h[01;31m#?[00;39m ls -l
+[?2004ltotal 20
+-rw-rw---- 1 jkwizera jkwizera  64 Dec 14 11:27  README
+-rw-rw---- 1 jkwizera jkwizera 142 Dec 14 11:27 'best sitcoms.txt'
+-rw-rw---- 1 jkwizera jkwizera  12 Dec 14 11:27  output
+-rw-rw---- 1 jkwizera jkwizera  45 Dec 14 11:27 'seven dwarfs.txt'
+-rw-rw---- 1 jkwizera jkwizera  25 Dec 14 11:27  shells.txt
+[?2004h[01;31m#?[00;39m cat output
+[?2004lI Love Lucy
+[?2004h[01;31m#?[00;39m this is not a command
+[?2004lthis: Command not found
+Child 199398 exited with status 2
+[?2004h[01;31m#?[00;39m echo Hello > /usr/bin/cant_write
+[?2004l/usr/bin/cant_write: Permission denied
+[?2004h[01;31m#?[00;39m cd
+[?2004l[?2004h[01;31m#?[00;39m pwd
+[?2004l/home/jkwizera
+[?2004h[01;31m#?[00;39m cd /home/jkwizera/Assignments/12
+[?2004l[?2004h[01;31m#?[00;39m pwd
+[?2004l/home/jkwizera/Assignments/12
+[?2004h[01;31m#?[00;39m cd ~
+[?2004l[?2004h[01;31m#?[00;39m pwd
+[?2004l/home/jkwizera
+[?2004h[01;31m#?[00;39m echo "Operator could you help me place this call?"
+[?2004lOperator could you help me place this call?
+[?2004h[01;31m#?[00;39m seq 10 | wc"-l"
+[?2004l10
+[?2004h[01;31m#?[00;39m seq 10 | wc"-l"echo "Operator could you help me place this call?"
+[?2004lOperator could you help me place this call?
+[?2004h[01;31m#?[00;39m env|grep PATH
+[?2004lLD_LIBRARY_PATH=:/usr/local/lib:/usr/local/lib
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/games:/usr/local/games:/snap/bin:/home/jkwizera/local/usr/bin:/home/jkwizera/local/usr/bin
+[?2004h[01;31m#?[00;39m echo Hello World | cat -n | cat -n | cat -n
+[?2004l     1	     1	     1	Hello World
+[?2004h[01;31m#?[00;39m echo \c
+[?2004lIllegal escape character 'c'
+[?2004h[01;31m#?[00;39m echo "\c"
+[?2004lIllegal escape character 'c'
+[?2004h[01;31m#?[00;39m echo "hi
+[?2004lUnterminated quote
+[?2004h[01;31m#?[00;39m echo "|1|2|3|" | sed -e "s/[0-9]//"
+[?2004l||2|3|
+[?2004h[01;31m#?[00;39m printf "=%s=\n" one two three four five six seven eight nine ten eleven twelve thirteen fourteen fifteen sixteen seventeen eighteen nineteen twenty twenty-one twenty-two twenty-three twenty-four|wc -l
+[?2004l24
+[?2004h[01;31m#?[00;39m printf"+%s"one"two"three
+[?2004l+one+two+three[?2004h[01;31m#?[00;39m 
+[?2004l[?2004h[01;31m#?[00;39m echo > file1 >file2
+[?2004lMultiple redirection
+[?2004h[01;31m#?[00;39m cat <
+[?2004lExpect filename after redirection
+[?2004h[01;31m#?[00;39m cat | cat | cat >
+[?2004lExpect filename after redirection
+[?2004h[01;31m#?[00;39m grep | 
+[?2004lNo command specified
+[?2004h[01;31m#?[00;39m | grep
+[?2004lNo command specified
+[?2004h[01;31m#?[00;39m echo || grep
+[?2004lNo command specified
+[?2004h[01;31m#?[00;39m echo \<\|\> | cat
+[?2004l<|>
+[?2004h[01;31m#?[00;39m echo hello\|grep ell
+[?2004lhello|grep ell
+[?2004h[01;31m#?[00;39m exit
+[?2004l

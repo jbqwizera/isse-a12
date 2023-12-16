@@ -254,12 +254,15 @@ int AST_execute(AST pipeline)
         char** argv = argvs[i];
 
         // builtin commands - manipulating shell require no forking
-        if (!strcmp(argv[0], "exit") || !strcmp(argv[0], "quit"))
+        if (!strcmp(argv[0], "exit") || !strcmp(argv[0], "quit")) {
+            free(argvs[i]);
             _exit(0);
+        }
         else if (!strcmp(argv[0], "cd")) {
             char* dirpath = argv[1];
             if (dirpath == NULL) dirpath = getenv("HOME");
             if (chdir(dirpath)) perror("cd");
+            free(argvs[i]);
             continue;
         }
 
