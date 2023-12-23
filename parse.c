@@ -64,6 +64,7 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
             if (globexit) {
                 snprintf(errmsg, errmsg_sz, "Glob encountered an error");
                 AST_free(ret);
+                free(value);
                 return NULL;
             }
         }
@@ -86,12 +87,22 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
 
             if (*errmsg) {
                 AST_free(ret);
+                free(value);
                 return NULL;
             }
 
             value = strdup(TOK_next(tokens).value);
             TOK_consume(tokens);
-            AST_append(&ret, AST_redirect(tt, AST_word(next_tt, 0, value)));
+            AST tempfile = NULL;
+            int globexit = glob_append(&tempfile, value);
+            if (globexit) {
+                snprintf(errmsg, errmsg_sz, "Glob encountered an error");
+                AST_free(tempfile);
+                AST_free(ret);
+                free(value);
+                return NULL;
+            }
+            AST_append(&ret, AST_redirect(tt, tempfile));
         }
         else if (tt == TOK_PIPE) {
             if (!ret)
@@ -103,15 +114,30 @@ AST Parse(CList tokens, char *errmsg, size_t errmsg_sz)
 
             if (*errmsg) {
                 AST_free(ret);
+                free(value);
                 return NULL;
             }
             value = strdup(TOK_next(tokens).value);
             TOK_consume(tokens);
-            ret = AST_pipe(ret, AST_word(next_tt, 0, value));
+            AST tempcmd = AST_word(next_tt, 0, value);
+            if (next_tt == TOK_WORD) {
+                AST_free(tempcmd);
+                tempcmd = NULL;
+                int globexit = glob_append(&tempcmd, value);
+                if (globexit) {
+                    snprintf(errmsg, errmsg_sz, "Glob encountered an error");
+                    AST_free(tempcmd);
+                    AST_free(ret);
+                    free(value);
+                    return NULL;
+                }
+            }
+            ret = AST_pipe(ret, tempcmd);
         }
         else {
             snprintf(errmsg, errmsg_sz, "Unexpected token %s", TT_to_str(tt));
             AST_free(ret);
+            free(value);
             return NULL;
         }
         free(value);

@@ -71,7 +71,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
                 len = input - start;
                 CL_append(tokens, TOK_nnew(TOK_WORD, start, len));
             }
-            start = input++;
+            start = ++input;
             while (*input && *input != '"') {
                 if ((ch = *input++) == '\\' && !isescape(*input)) {
                     snprintf(errmsg, errmsg_sz,
@@ -86,7 +86,7 @@ CList TOK_tokenize_input(const char* input, char* errmsg, size_t errmsg_sz)
                 CL_free(tokens);
                 return NULL;
             }
-            len = input - start + 1;
+            len = input - start;
             CL_append(tokens, TOK_nnew(TOK_QUOTED_WORD, start, len));
             start = NULL;
 

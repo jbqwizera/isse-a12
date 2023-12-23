@@ -187,19 +187,6 @@ void AST_free(AST pipeline)
 }
 
 
-/*
-static int pipescount(AST pipeline)
-{
-    if (!pipeline) return 0;
-
-    int ret = pipescount(pipeline->right);
-    if (pipeline->type == OP_PIPE)
-        ret = 1 + pipescount(pipeline->left);
-
-    return ret;
-}
-*/
-
 static void setargs(AST pipeline, char*** argvs, int* argcs, int n)
 {
     // process children right to left, due to somewhat left-associative
@@ -255,14 +242,14 @@ int AST_execute(AST pipeline)
 
         // builtin commands - manipulating shell require no forking
         if (!strcmp(argv[0], "exit") || !strcmp(argv[0], "quit")) {
-            free(argvs[i]);
+            free(argv);
             _exit(0);
         }
         else if (!strcmp(argv[0], "cd")) {
             char* dirpath = argv[1];
             if (dirpath == NULL) dirpath = getenv("HOME");
             if (chdir(dirpath)) perror("cd");
-            free(argvs[i]);
+            free(argv);
             continue;
         }
 
@@ -281,34 +268,57 @@ int AST_execute(AST pipeline)
                 if (j != i+0) close(fds[j][1]);
             }
 
-            if (argc-2 > 0) {
-                char* value = argv[argc-2];
-                if (!strcmp(value, "<")) {
-                    // input redirection
-                    int ifd = open(argv[argc-1], O_RDONLY);
-                    if (ifd == -1) {
-                        printf("%s: Permission denied\n", argv[argc-1]);
-                        _exit(EXIT_FAILURE);
-                    }
-
-                    dup2(ifd, STDIN_FILENO);
-                    close(ifd);
-                    argv[argc-2] = NULL;
-                }
-                else if (!strcmp(value, ">")) {
-                    // output redirection
-                    int ofd = open(argv[argc-1], O_RDWR | O_CREAT | O_TRUNC,
-                        S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
-                    if (ofd == -1) {
-                        printf("%s: Permission denied\n", argv[argc-1]);
-                        _exit(EXIT_FAILURE);
-                    }
-
-                    dup2(ofd, STDOUT_FILENO);
-                    close(ofd);
-                    argv[argc-2] = NULL;
-                }
+            // check for any i/o redirection
+            int lessthan = -1;
+            int greaterthan = -1;
+            for (int j = 1; j < argc - 1; j++) {
+                if (strcmp(argv[j], "<") == 0) lessthan = j;
+                if (strcmp(argv[j], ">") == 0) greaterthan = j;
             }
+
+            // input redirection
+            if (lessthan >= 0) {
+                char* infile = argv[lessthan+1];
+                int ifd = open(infile, O_RDONLY);
+                if (ifd == -1) {
+                    perror("open");
+                    printf("%s: Permission denied\n", infile);
+                    _exit(EXIT_FAILURE);
+                }
+
+                dup2(ifd, STDIN_FILENO);
+                close(ifd);
+
+                // shift argv values (including the NULL terminator)
+                // to the right of < by 2, overwritting the < and the filename
+                int offset = 2;
+                for (int j = lessthan; j+offset <= argc; j++)
+                    argv[j] = argv[j+offset];
+                argc -= offset;
+                if (lessthan < greaterthan) greaterthan -= offset;
+            }
+
+            // output redirection
+            if (greaterthan >= 0) {
+                char* outfile = argv[greaterthan+1];
+                int ofd = open(outfile, O_RDWR | O_CREAT | O_TRUNC,
+                    S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP);
+                if (ofd == -1) {
+                    printf("%s: Permission denied\n", outfile);
+                    _exit(EXIT_FAILURE);
+                }
+
+                dup2(ofd, STDOUT_FILENO);
+                close(ofd);
+
+                // shift argv values (including the NULL terminator)
+                // to the right of > by 2, overwritting the < and the filename
+                int offset = 2;
+                for (int j = greaterthan; j+offset <= argc; j++)
+                    argv[j] = argv[j+offset];
+                argc -= offset;
+            }
+
 
             // piping: redirect stdin to previous pipe
             if (i > 0) {
